@@ -5,7 +5,7 @@ const CryptoJS = require("crypto-js");
 const WebSocket = require("ws");
 
 // Constants
-const API_HOST = "home.cielowigle.com";
+const API_HOST = "api.smartcielo.com";
 const API_HTTP_PROTOCOL = "https://";
 const API_WS_PROTOCOL = "wss://";
 const PING_INTERVAL = 5 * 60 * 1000;
