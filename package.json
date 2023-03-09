@@ -1,7 +1,7 @@
 {
-  "name": "node-mrcool",
+  "name": "node-cielo",
   "version": "1.0.1",
-  "description": "NodeJS interface for the SmartCielo remote AC control API used by MrCool minisplits",
+  "description": "NodeJS interface for the SmartCielo remote AC control API",
   "dependencies": {
     "https-proxy-agent": "^5.0.0",
     "node-fetch": "^2.6.1",
@@ -16,17 +16,17 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/isaac-webb/node-mrcool.git"
+    "url": "git+https://github.com/ryanfroese/node-cielo.git"
   },
   "keywords": [
-    "MRCOOL",
     "smartcielo",
-    "smarthvac"
+    "smarthvac",
+    "minisplit"
   ],
-  "author": "Isaac Webb",
+  "author": "Ryan Froese",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/isaac-webb/node-mrcool/issues"
+    "url": "https://github.com/ryanfroese/node-cielo/issues"
   },
-  "homepage": "https://github.com/isaac-webb/node-mrcool#readme"
+  "homepage": "https://github.com/ryanfroese/node-cielo#readme"
 }
