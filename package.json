@@ -1,5 +1,5 @@
 {
-  "name": "node-cielo",
+  "name": "node-smartcielo-ws",
   "version": "1.0.1",
   "description": "NodeJS interface for the SmartCielo remote AC control API",
   "dependencies": {
