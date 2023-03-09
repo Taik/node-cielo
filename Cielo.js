@@ -1,13 +1,10 @@
 const querystring = require("querystring");
 const fetch = require("node-fetch");
-const HTMLParser = require("node-html-parser");
-const CryptoJS = require("crypto-js");
 const WebSocket = require("ws");
 
 // Constants
 const API_HOST = "api.smartcielo.com";
 const API_HTTP_PROTOCOL = "https://";
-const API_WS_PROTOCOL = "wss://";
 const PING_INTERVAL = 5 * 60 * 1000;
 const DEFAULT_POWER = "off";
 const DEFAULT_MODE = "auto";
@@ -75,10 +72,10 @@ class CieloAPIConnection {
     this.hvacs = [];
     this.#commandCount = 0;
 
+    // console.log("accessToken:", this.#accessToken);
+
     // Get the initial information on all devices
-    const deviceInfo = await this.#getDeviceInfo(
-      await this.#getAccessCredentials()
-    );
+    const deviceInfo = await this.#getDeviceInfo();
 
     // Ensure the request was successful
     if (deviceInfo.error) return Promise.reject(deviceInfo.error);
@@ -89,7 +86,7 @@ class CieloAPIConnection {
         let hvac = new CieloHVAC(
           device.macAddress,
           device.deviceName,
-          device.applianceID,
+          device.applianceId,
           device.fwVersion
         );
         hvac.updateState(
@@ -120,21 +117,16 @@ class CieloAPIConnection {
    */
   async establishConnection(username, password, ip, agent) {
     // TODO: Add ability to recognize authentication failure
-
-    // Perform initial authentication
-    this.#applicationCookies = await this.#getApplicationCookies(
-      username,
-      password,
-      ip
+    await this.#getAccessTokenAndSessionId(username, password, ip).then(
+      (data) => {
+        // console.log(data);
+        // Save the results
+        this.#sessionID = data.sessionId;
+        this.#userID = data.userId;
+        this.#accessToken = data.accessToken;
+        return;
+      }
     );
-    const [appUser, sessionID] = await this.#getAppUserAndSessionId();
-
-    // Save the results
-    this.#sessionID = sessionID;
-    this.#userID = appUser.userID;
-    this.#accessToken = appUser.accessToken;
-    this.#socketInfo = await this.#negotiateSocketInfo();
-
     return Promise.resolve();
   }
 
@@ -144,19 +136,23 @@ class CieloAPIConnection {
    */
   async #connect() {
     // Establish the WebSockets connection
-    const connectUrl = new URL(API_WS_PROTOCOL + API_HOST + "/signalr/connect");
-    connectUrl.search = querystring.stringify({
-      transport: "webSockets",
-      clientProtocol: "2.1",
-      connectionToken: this.#socketInfo.ConnectionToken,
-      connectionData: JSON.stringify([{name: "devicesactionhub"}]),
-      tid: 0,
-    });
+    const connectUrl = new URL(
+      "wss://apiwss.smartcielo.com/websocket/" +
+        "?sessionId=" +
+        this.#sessionID +
+        "&token=" +
+        this.#accessToken
+    );
+    // connectUrl.search = querystring.stringify({
+    //   transport: "webSockets",
+    //   clientProtocol: "2.1",
+    //   connectionToken: this.#accessToken,
+    //   connectionData: JSON.stringify([{name: "devicesactionhub"}]),
+    //   tid: 0,
+    // });
     const connectPayload = {
-      agent: this.#agent,
-      headers: {
-        Cookie: this.#applicationCookies,
-      },
+      sessionId: this.#agent,
+      token: this.#accessToken,
     };
     this.#ws = new WebSocket(connectUrl, connectPayload);
 
@@ -175,20 +171,21 @@ class CieloAPIConnection {
     this.#ws.on("message", (message) => {
       const data = JSON.parse(message);
       if (
-        data.M &&
-        Array.isArray(data.M) &&
-        data.M.length &&
-        data.M[0].M &&
-        data.M[0].A &&
-        Array.isArray(data.M[0].A) &&
-        data.M[0].A.length
+        data.message_type &&
+        typeof data.message_type === "string" &&
+        data.message_type.length > 0 &&
+        data.action &&
+        typeof data.action === "object"
       ) {
-        const method = data.M[0].M;
-        const status = data.M[0].A[0];
-        switch (method) {
-          case "actionReceivedAC":
+        const type = data.mid;
+        const status = data.action;
+        const roomTemp = data.lat_env_var.temperature;
+        const thisMac = data.mac_address;
+        switch (type) {
+          case "WEB":
             this.hvacs.forEach((hvac, index) => {
-              if (hvac.getMacAddress() === status.macAddress) {
+              if (hvac.getMacAddress() === thisMac) {
+                console.log("Triggering Update: ", status.power, status.temp);
                 this.hvacs[index].updateState(
                   status.power,
                   status.temp,
@@ -201,14 +198,15 @@ class CieloAPIConnection {
               this.#commandCallback(status);
             }
             break;
-          case "HeartBeatPerformed":
+          case "Heartbeat":
             this.hvacs.forEach((hvac, index) => {
-              if (hvac.getMacAddress() === status.macAddress) {
-                this.hvacs[index].updateRoomTemperature(status.roomTemperature);
+              if (hvac.getMacAddress() === thisMac) {
+                console.log("Recieved update from heartbeat temp: ", roomTemp);
+                this.hvacs[index].updateRoomTemperature(roomTemp);
               }
             });
             if (this.#temperatureCallback !== undefined) {
-              this.#temperatureCallback(status.roomTemperature);
+              this.#temperatureCallback(roomTemp);
             }
             break;
         }
@@ -230,84 +228,56 @@ class CieloAPIConnection {
 
   // API Calls
   /**
-   * Logs into the Cielo API using the provided credentials, and extracts the
-   * relevant application cookies from the response.
-   *
-   * @param {string} username The username to login with
-   * @param {string} password The password for the provided username
-   * @param {string} ip The public IP address of the network the HVACs are on
-   * @returns {Promise<string>} The relevant cookies from the login request
-   */
-  async #getApplicationCookies(username, password, ip) {
-    const loginUrl = new URL(API_HTTP_PROTOCOL + API_HOST + "/auth/login");
-    const loginPayload = {
-      agent: this.#agent,
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        Cookie: "",
-      },
-      body:
-        "mobileDeviceName=chrome&deviceTokenId=" +
-        ip +
-        "&timeZone=-07%3A00&state=&client_id=&response_type=&scope=&redirect_uri=&userId=" +
-        username +
-        "&password=" +
-        password +
-        "&rememberMe=false",
-      method: "POST",
-      redirect: "manual",
-    };
-    const response = await fetch(loginUrl, loginPayload);
-    return this.#getCookiesFromResponse(response);
-  }
-
-  /**
    * Extracts the appUser and sessionID values from the hidden HTML inputs on
    * the index page.
    *
    * @returns {Promise<string[]>} An array containing the appUser and
    *      sessionID
    */
-  async #getAppUserAndSessionId() {
-    const appUserUrl = new URL(API_HTTP_PROTOCOL + API_HOST + "/home/index");
+  async #getAccessTokenAndSessionId(username, password, ip) {
+    const appUserUrl = new URL(API_HTTP_PROTOCOL + API_HOST + "/web/login");
     const appUserPayload = {
       agent: this.#agent,
-      headers: {
-        Cookie: this.#applicationCookies,
-      },
-    };
-    const appUserHtml = await fetch(appUserUrl, appUserPayload);
-    const root = HTMLParser.parse(await appUserHtml.text());
-    const appUserString = root
-      .querySelector("#hdnAppUser")
-      .getAttribute("value");
-    const appUser = JSON.parse(this.#decryptString(appUserString));
-    const sessionId = root.querySelector("#hdnSessionID").getAttribute("value");
-    return [appUser, sessionId];
-  }
-
-  /**
-   * Obtains an access token for the API using cookies and a decrypted
-   * username.
-   *
-   * @returns {Promise<any>} A Promise containing the JSON response. Contains
-   *      fields access_token, token_type, expires_in, userName, .issued, and
-   *      .expires.
-   */
-  async #getAccessCredentials() {
-    const tokenUrl = new URL(API_HTTP_PROTOCOL + API_HOST + "/cAcc");
-    const tokenPayload = {
-      agent: this.#agent,
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        Cookie: this.#applicationCookies,
-      },
-      body:
-        "grant_type=password&username=" + this.#userID + "&password=undefined",
       method: "POST",
+      headers: {
+        authority: "api.smartcielo.com",
+        accept: "application/json, text/plain, */*",
+        "accept-language": "en-US,en;q=0.9",
+        "cache-control": "no-cache",
+        "content-type": "application/json; charset=UTF-8",
+        origin: "https://home.cielowigle.com",
+        pragma: "no-cache",
+        referer: "https://home.cielowigle.com/",
+        "x-api-key": "7xTAU4y4B34u8DjMsODlEyprRRQEsbJ3IB7vZie4",
+      },
+      body: JSON.stringify({
+        user: {
+          userId: username,
+          password: password,
+          mobileDeviceId: "WEB",
+          deviceTokenId: "WEB",
+          appType: "WEB",
+          appVersion: "1.0",
+          timeZone: "America/Los_Angeles",
+          mobileDeviceName: "chrome",
+          deviceType: "WEB",
+          ipAddress: ip,
+          isSmartHVAC: 0,
+          locale: "en",
+        },
+      }),
     };
-    const accessCredentials = await fetch(tokenUrl, tokenPayload);
-    return accessCredentials.json();
+    const loginData = await fetch(appUserUrl, appUserPayload)
+      .then((response) => response.json())
+      .then((responseJSON) => {
+        // console.log(responseJSON);
+        const initialLoginData = responseJSON.data.user;
+        return initialLoginData;
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+    return loginData;
   }
 
   /**
@@ -317,55 +287,44 @@ class CieloAPIConnection {
    * @param {any} accessCredentials A JSON object containing valid credentials
    * @returns {Promise<any>} A Promise containing the JSON response
    */
-  async #getDeviceInfo(accessCredentials) {
+  async #getDeviceInfo() {
     const deviceInfoUrl = new URL(
-      API_HTTP_PROTOCOL + API_HOST + "/api/device/initsubscription"
+      API_HTTP_PROTOCOL + API_HOST + "/web/devices?limit=420"
     );
     const deviceInfoPayload = {
       agent: this.#agent,
+      method: "GET",
       headers: {
-        "Content-Type": "application/json",
-        Authorization:
-          accessCredentials.token_type + " " + accessCredentials.access_token,
-      },
-      body: JSON.stringify({
-        userID: this.#userID,
-        accessToken: this.#accessToken,
-        expiresIn: accessCredentials.expires_in,
-        sessionId: this.#sessionID,
-      }),
-      method: "POST",
-    };
-    const deviceInfo = await fetch(deviceInfoUrl, deviceInfoPayload);
-    return deviceInfo.json();
-  }
-
-  /**
-   * Negotiates socket parameters with the Cielo API.
-   *
-   * @returns {Promise<any>} A Promise containing the JSON response. Contains
-   *      fields Url, ConnectionToken, ConnectionId, KeepAliveTimeout,
-   *      DisconnectTimeout, ConnectionTimeout, TryWebSockets,
-   *      ProtocolVersion, TransportConnectTimeout, and LongPollDelay.
-   */
-  async #negotiateSocketInfo() {
-    const time = new Date();
-    const negotiateUrl = new URL(
-      API_HTTP_PROTOCOL + API_HOST + "/signalr/negotiate"
-    );
-    negotiateUrl.search = querystring.stringify({
-      connectionData: JSON.stringify([{name: "devicesactionhub"}]),
-      clientProtocol: "2.1",
-      _: time.getTime().toString(),
-    });
-    const negotiatePayload = {
-      agent: this.#agent,
-      headers: {
-        Cookie: this.#applicationCookies,
+        authority: "api.smartcielo.com",
+        accept: "*/*",
+        "accept-language": "en-US,en;q=0.9",
+        authorization: this.#accessToken,
+        "cache-control": "no-cache",
+        "content-type": "application/json; charset=utf-8",
+        origin: "https://home.cielowigle.com",
+        pragma: "no-cache",
+        referer: "https://home.cielowigle.com/",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "macOS",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "cross-site",
+        "user-agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+        "x-api-key": "7xTAU4y4B34u8DjMsODlEyprRRQEsbJ3IB7vZie4",
       },
     };
-    const socketInfo = await fetch(negotiateUrl, negotiatePayload);
-    return socketInfo.json();
+    const devicesData = await fetch(deviceInfoUrl, deviceInfoPayload)
+      .then((response) => response.json())
+      .then((responseJSON) => {
+        // console.log("devicesResponse... ", responseJSON.data.listDevices);
+        return responseJSON;
+      })
+      .catch((error) => {
+        console.error(error);
+        return;
+      });
+    return devicesData;
   }
 
   /**
@@ -376,22 +335,22 @@ class CieloAPIConnection {
    *      error if rejected
    */
   async #startSocket() {
-    const time = new Date();
-    const startUrl = new URL(API_HTTP_PROTOCOL + API_HOST + "/signalr/start");
-    startUrl.search = querystring.stringify({
-      transport: "webSockets",
-      connectionToken: this.#socketInfo.ConnectionToken,
-      connectionData: JSON.stringify([{name: "devicesactionhub"}]),
-      clientProtocol: "2.1",
-      _: time.getTime().toString(),
-    });
-    const startPayload = {
-      agent: this.#agent,
-      headers: {
-        Cookie: this.#applicationCookies,
-      },
-    };
-    const startResponse = await fetch(startUrl, startPayload);
+    // const time = new Date();
+    // const startUrl = new URL(API_HTTP_PROTOCOL + API_HOST + "/signalr/start");
+    // startUrl.search = querystring.stringify({
+    //   transport: "webSockets",
+    //   connectionToken: this.#accessToken,
+    //   connectionData: JSON.stringify([{name: "devicesactionhub"}]),
+    //   clientProtocol: "2.1",
+    //   _: time.getTime().toString(),
+    // });
+    // const startPayload = {
+    //   agent: this.#agent,
+    //   headers: {
+    //     Cookie: this.#applicationCookies,
+    //   },
+    // };
+    // const startResponse = await fetch(startUrl, startPayload);
 
     // Periodically ping the socket to keep it alive
     const pingTimer = setInterval(async () => {
@@ -427,32 +386,6 @@ class CieloAPIConnection {
 
   // Utility methods
   /**
-   * A function that extracts cookies that the responses requests the client
-   * set.
-   *
-   * @param {Response} response A response to an HTTP request
-   * @returns A string containing all of the set cookies
-   */
-  #getCookiesFromResponse(response) {
-    const cookieArray = response.headers.raw()["set-cookie"];
-    return cookieArray.map((element) => element.split(";")[0]).join(";");
-  }
-
-  // From: https://stackoverflow.com/questions/36474899/encrypt-in-javascript-and-decrypt-in-c-sharp-with-aes-algorithm
-  #decryptString(input) {
-    const key = CryptoJS.enc.Utf8.parse("8080808080808080");
-    const iv = CryptoJS.enc.Utf8.parse("8080808080808080");
-    const output = CryptoJS.AES.decrypt(input, key, {
-      FeedbackSize: 128,
-      key: key,
-      iv: iv,
-      mode: CryptoJS.mode.CBC,
-      padding: CryptoJS.pad.Pkcs7,
-    });
-    return output.toString(CryptoJS.enc.Utf8);
-  }
-
-  /**
    * Creates an object containing all necessary fields for a command
    *
    * @param {string} temp Temperature setting
@@ -474,57 +407,19 @@ class CieloAPIConnection {
     power,
     fanspeed,
     mode,
-    macAddress,
-    applianceID,
     isAction,
     performedAction,
-    performedValue,
-    mid,
-    deviceTypeVersion,
-    fwVersion
+    performedValue
   ) {
     return {
-      schTS: "",
-      tempRange: "",
-      turbo: "off",
-      mid: isAction ? mid : "",
-      mode: isAction && performedAction === "mode" ? performedValue : mode,
-      modeValue: "",
-      temp: isAction && performedAction === "temp" ? performedValue : temp,
-      tempValue: "",
-      power: isAction && performedAction === "power" ? performedValue : power,
-      swing:
-        isAction &&
-        (performedAction === "mode" ||
-          performedAction === "temp" ||
-          (performedAction === "power" && performedValue === "off"))
-          ? "auto"
-          : "auto",
       fanspeed: fanspeed,
-      scheduleID: "",
-      macAddress: macAddress,
-      applianceID: applianceID,
-      performedAction: isAction ? performedAction : "",
-      performedActionValue: isAction ? performedValue : "",
-      actualPower: power,
-      modeRule: "",
-      tempRule: isAction ? "default" : "",
-      swingRule: isAction ? "default" : "",
-      fanRule: isAction
-        ? performedAction === "power" && performedValue === "on"
-          ? "vanish"
-          : "default"
-        : "",
-      isSchedule: false,
-      aSrc: "WEB",
-      ts: isAction ? Math.round(Date.now() / 1000) : "",
-      deviceTypeVersion: isAction ? deviceTypeVersion : "",
-      deviceType: "BREEZ-I",
-      light: "",
-      rStatus: "",
-      fwVersion: isAction ? fwVersion : "",
-      exe: "",
-      isRunning: false,
+      light: "off",
+      mode: isAction && performedAction === "mode" ? performedValue : mode,
+      oldPower: power,
+      power: power,
+      swing: "auto/stop",
+      temp: isAction && performedAction === "temp" ? performedValue : temp,
+      turbo: "off",
     };
   }
 
@@ -537,42 +432,32 @@ class CieloAPIConnection {
    * @returns {string}
    */
   #buildCommandPayload(hvac, performedAction, performedActionValue) {
-    const deviceTypeVersion = "BI03";
     const commandCount = this.#commandCount++;
+    const deviceTypeVersion = "BP01";
     const result = JSON.stringify({
-      H: "devicesactionhub",
-      M: "broadcastActionAC",
-      A: [
-        this.#buildCommand(
-          hvac.getTemperature(),
-          hvac.getPower(),
-          hvac.getFanSpeed(),
-          hvac.getMode(),
-          hvac.getMacAddress(),
-          hvac.getApplianceID(),
-          true,
-          performedAction,
-          performedActionValue,
-          this.#sessionID,
-          deviceTypeVersion,
-          hvac.getFwVersion()
-        ),
-        this.#buildCommand(
-          hvac.getTemperature(),
-          hvac.getPower(),
-          hvac.getFanSpeed(),
-          hvac.getMode(),
-          hvac.getMacAddress(),
-          hvac.getApplianceID(),
-          false,
-          performedAction,
-          performedActionValue,
-          this.#sessionID,
-          deviceTypeVersion,
-          hvac.getFwVersion()
-        ),
-      ],
-      I: commandCount,
+      action: "actionControl",
+      actionSource: "WEB",
+      actionType: performedAction,
+      actionValue: performedActionValue,
+      actions: this.#buildCommand(
+        hvac.getTemperature(),
+        hvac.getPower(),
+        hvac.getFanSpeed(),
+        hvac.getMode(),
+        true,
+        performedAction,
+        performedActionValue
+      ),
+      applianceId: hvac.getApplianceID(),
+      applianceType: "AC",
+      application_version: "1.0.0",
+      connection_source: 0,
+      deviceTypeVersion: deviceTypeVersion,
+      fwVersion: hvac.getFwVersion(),
+      macAddress: hvac.getMacAddress(),
+      mid: this.#sessionID,
+      token: this.#accessToken,
+      ts: Math.round(Date.now() / 1000),
     });
     return result;
   }
@@ -591,6 +476,7 @@ class CieloAPIConnection {
         this.#buildCommandPayload(hvac, performedAction, performedActionValue),
         (error) => {
           if (error) {
+            log.error(error);
             reject(error);
           } else {
             resolve();

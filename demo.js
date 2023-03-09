@@ -53,9 +53,9 @@ function sleep(ms) {
       OPTIONS.ip,
       agent
     );
-    await api.subscribeToHVACs(["000000000000"]);
+    await api.subscribeToHVACs(["C45BBEC42467"]);
 
-    console.log("Connected.");
+    console.log("Connected, hvacs: ", api.hvacs.length);
     api.hvacs.forEach((hvac) => {
       console.log(hvac.toString());
     });
@@ -76,8 +76,8 @@ function sleep(ms) {
       console.log(hvac.toString());
     });
 
-    console.log("Sending temperature 75");
-    await api.hvacs[0].setTemperature("75", api);
+    console.log("Sending temperature 68");
+    await api.hvacs[0].setTemperature("68", api);
     await sleep(10000);
     api.hvacs.forEach((hvac) => {
       console.log(hvac.toString());
