@@ -1,6 +1,6 @@
 {
   "name": "node-smartcielo-ws",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "NodeJS interface for the SmartCielo remote AC control API",
   "dependencies": {
     "https-proxy-agent": "^5.0.0",

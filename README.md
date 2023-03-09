@@ -1,6 +1,6 @@
-# NodeJS Interface for MrCool Mini Splits
+# NodeJS Interface for Cielo Thermostats
 
-by Isaac Webb
+by Ryan Froese
 
 [![mit license](https://badgen.net/badge/license/MIT/red)](https://github.com/isaac-webb/node-mrcool/blob/master/LICENSE)
 [![npm](https://badgen.net/npm/v/node-mrcool)](https://www.npmjs.com/package/node-mrcool)
@@ -9,14 +9,14 @@ by Isaac Webb
 ## Overview
 
 This interface facilitates communication with AC equipment that is connected to
-the internet by SmartCielo. This was specifically developed to facilitate
-automation of the MRCOOL DIY line of ACs.
+the internet by SmartCielo. This was specifically adapted to facilitate
+automation of the Cielo thermostats after some API changes broke other's implementations.
 
 ### Attribution
 
 The vast majority of this code is either directly from or largely based on the
 [`node-smartcielo`](https://github.com/nicholasrobinson/node-smartcielo) package
-by [Nicholas Robinson](https://github.com/nicholasrobinson). I forked the repo,
+by [Nicholas Robinson](https://github.com/nicholasrobinson) and [`node-mrCool`](https://github.com/isaac-webb/node-mrcool). I forked the repo from [Isaac Webb](https://github.com/isaac-webb),
 updated/fixed the issues that prevented the package from working, and
 republished it.
 
@@ -24,7 +24,7 @@ republished it.
 
 ```bash
 $ npm install node-mrcool
-``` 
+```
 
 ## Usage
 
@@ -35,17 +35,17 @@ $ node demo.js -u <username> -p <password> -i <ip_address> [-v]
 ```
 
 ## References
-    
-* [MrCool](https://www.mrcool.com/)
-* [SmartCielo](https://home.cielowigle.com/)
+
+- [MrCool](https://www.mrcool.com/)
+- [SmartCielo](https://home.cielowigle.com/)
 
 ## Notes
 
-* The `-v` option will send all communications via an HTTP proxy running on
+- The `-v` option will send all communications via an HTTP proxy running on
   `localhost:8888` for debugging.
 
-Feel free to reach out with issues, fixes, improvements, or any questions.
+This is my first attempt at publishging to NPM & GitHub, so reach out with issues and I'll do my best to respond.
 
-Best,
+Good Luck,
 
-Isaac Webb
+Ryan Froese
