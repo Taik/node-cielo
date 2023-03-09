@@ -5,7 +5,7 @@ const WebSocket = require("ws");
 // Constants
 const API_HOST = "api.smartcielo.com";
 const API_HTTP_PROTOCOL = "https://";
-const PING_INTERVAL = 5 * 60 * 1000;
+const PING_INTERVAL = 50 * 60 * 1000;
 const DEFAULT_POWER = "off";
 const DEFAULT_MODE = "auto";
 const DEFAULT_FAN = "auto";
@@ -353,7 +353,7 @@ class CieloAPIConnection {
     // const startResponse = await fetch(startUrl, startPayload);
 
     // Periodically ping the socket to keep it alive
-    const pingTimer = setInterval(async () => {
+    setInterval(async () => {
       try {
         await this.#pingSocket();
       } catch (error) {
@@ -370,18 +370,53 @@ class CieloAPIConnection {
    */
   async #pingSocket() {
     const time = new Date();
-    const pingUrl = new URL(API_HTTP_PROTOCOL + API_HOST + "/signalr/ping");
-    pingUrl.search = querystring.stringify({
-      _: time.getTime().toString(),
-    });
+    const pingUrl = new URL(
+      "https://api.smartcielo.com/web/token/refresh" +
+        "?refreshToken=" +
+        this.#accessToken
+    );
     const pingPayload = {
       agent: this.#agent,
       headers: {
-        Cookie: this.#applicationCookies,
+        accept: "application/json, text/plain, */*",
+        "accept-language": "en-US,en;q=0.9",
+        authorization: this.#accessToken,
+        "cache-control": "no-cache",
+        "content-type": "application/json; charset=utf-8",
+        pragma: "no-cache",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"macOS"',
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "cross-site",
+        "x-api-key": "7xTAU4y4B34u8DjMsODlEyprRRQEsbJ3IB7vZie4",
       },
+      referrer: "https://home.cielowigle.com/",
+      referrerPolicy: "strict-origin-when-cross-origin",
+      body: null,
+      method: "GET",
+      mode: "cors",
+      credentials: "include",
     };
-    const pingResponse = await fetch(pingUrl, pingPayload);
-    return pingResponse.json();
+    const pingResponse = await fetch(pingUrl, pingPayload)
+      .then((response) => response.json())
+      .then((responseJSON) => {
+        const expires = new Date(responseJSON.data.expiresIn * 1000);
+        // Calculate the difference between the two dates in minutes
+        const diffMinutes = Math.round((expires - time) / 60000);
+
+        // Log the difference to the console
+        console.log(
+          `The refreshed token will expire in ${diffMinutes} minutes.`
+        );
+        return responseJSON;
+      })
+      .catch((error) => {
+        console.error(error);
+        return;
+      });
+
+    return pingResponse;
   }
 
   // Utility methods
