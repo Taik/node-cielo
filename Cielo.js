@@ -82,7 +82,6 @@ class CieloAPIConnection {
 
     // Extract the relevant HVACs from the results
     for (const device of deviceInfo.data.listDevices) {
-      console.log('Found:', device.macAddress);
       if (macAddresses.includes(device.macAddress)) {
         let hvac = new CieloHVAC(
           device.macAddress,
@@ -144,13 +143,6 @@ class CieloAPIConnection {
         '&token=' +
         this.#accessToken,
     );
-    // connectUrl.search = querystring.stringify({
-    //   transport: "webSockets",
-    //   clientProtocol: "2.1",
-    //   connectionToken: this.#accessToken,
-    //   connectionData: JSON.stringify([{name: "devicesactionhub"}]),
-    //   tid: 0,
-    // });
     const connectPayload = {
       sessionId: this.#agent,
       token: this.#accessToken,
@@ -186,7 +178,6 @@ class CieloAPIConnection {
           case 'WEB':
             this.hvacs.forEach((hvac, index) => {
               if (hvac.getMacAddress() === thisMac) {
-                console.log('Triggering Update: ', status.power, status.temp);
                 this.hvacs[index].updateState(
                   status.power,
                   status.temp,
@@ -202,7 +193,6 @@ class CieloAPIConnection {
           case 'Heartbeat':
             this.hvacs.forEach((hvac, index) => {
               if (hvac.getMacAddress() === thisMac) {
-                console.log('Recieved update from heartbeat temp: ', roomTemp);
                 this.hvacs[index].updateRoomTemperature(roomTemp);
               }
             });
@@ -336,37 +326,21 @@ class CieloAPIConnection {
    *      error if rejected
    */
   async #startSocket() {
-    // const time = new Date();
-    // const startUrl = new URL(API_HTTP_PROTOCOL + API_HOST + "/signalr/start");
-    // startUrl.search = querystring.stringify({
-    //   transport: "webSockets",
-    //   connectionToken: this.#accessToken,
-    //   connectionData: JSON.stringify([{name: "devicesactionhub"}]),
-    //   clientProtocol: "2.1",
-    //   _: time.getTime().toString(),
-    // });
-    // const startPayload = {
-    //   agent: this.#agent,
-    //   headers: {
-    //     Cookie: this.#applicationCookies,
-    //   },
-    // };
-    // const startResponse = await fetch(startUrl, startPayload);
-
-    // Periodically ping the socket to keep it alive
-    setInterval(async () => {
-      try {
-        await this.#pingSocket();
-      } catch (error) {
-        this.#errorCallback(error);
-      }
-    }, PING_INTERVAL);
+    // Periodically ping the socket to keep it alive, seems to be unnessesary with current API
+    // setInterval(async () => {
+    //   try {
+    //     console.log('pinging socket');
+    //     await this.#pingSocket();
+    //   } catch (error) {
+    //     this.#errorCallback(error);
+    //   }
+    // }, PING_INTERVAL);
 
     return Promise.resolve();
   }
 
   /**
-   *
+   *This refreshes the token by returning a refreshed token, may not be neccesary with the new API
    * @returns
    */
   async #pingSocket() {
