@@ -23,7 +23,7 @@ republished it.
 ## Installation
 
 ```bash
-$ npm install node-mrcool
+$ npm install node-smartcielo-ws
 ```
 
 ## Usage
@@ -36,7 +36,6 @@ $ node demo.js -u <username> -p <password> -i <ip_address> -m <mac_address_therm
 
 ## References
 
-- [MrCool](https://www.mrcool.com/)
 - [SmartCielo](https://home.cielowigle.com/)
 
 ## Notes
