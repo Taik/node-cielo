@@ -14,6 +14,7 @@ const OPTION_DEFINITIONS = [
   {name: 'password', alias: 'p', type: String},
   {name: 'ip', alias: 'i', type: String},
   {name: 'verbose', alias: 'v', type: Boolean},
+  {name: 'macAddress', alias: 'm', type: String},
 ];
 const OPTIONS = commandLineArgs(OPTION_DEFINITIONS);
 
@@ -53,7 +54,7 @@ function sleep(ms) {
       OPTIONS.ip,
       agent,
     );
-    await api.subscribeToHVACs(['C45BBEC42467']);
+    await api.subscribeToHVACs([OPTIONS.macAddress]);
 
     console.log('Connected, hvacs: ', api.hvacs.length);
     api.hvacs.forEach((hvac) => {
