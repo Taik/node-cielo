@@ -31,6 +31,9 @@ $ npm install node-mrcool
 ### Sample Code Execution
 
 ```bash
+$ git clone https://github.com/ryanfroese/node-cielo.git
+$ cd node-cielo
+$ npm install
 $ node demo.js -u <username> -p <password> -i <ip_address> -m <mac_address_thermostat> -v
 ```
 

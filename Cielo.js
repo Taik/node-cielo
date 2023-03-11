@@ -15,6 +15,7 @@ const DEFAULT_TEMPERATURE = 75;
 class CieloAPIConnection {
   // Connection information
   #sessionID;
+  #userID;
   #accessToken;
   #agent;
   #commandCount = 0;
