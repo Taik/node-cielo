@@ -52,39 +52,42 @@ function sleep(ms) {
       OPTIONS.username,
       OPTIONS.password,
       OPTIONS.ip,
-      agent,
+      agent
     );
+    // Uppercase mac address before subscribing
+    OPTIONS.macAddress = OPTIONS.macAddress.toUpperCase();
+
     await api.subscribeToHVACs([OPTIONS.macAddress]);
 
-    console.log('Connected, hvacs: ', api.hvacs.length);
+    console.log("Connected, hvacs: ", api.hvacs.length);
     api.hvacs.forEach((hvac) => {
       console.log(hvac.toString());
     });
 
     const temp = api.hvacs[0].getTemperature();
 
-    console.log('Sending power off');
+    console.log("Sending power off");
     await api.hvacs[0].powerOff(api);
     await sleep(10000);
     api.hvacs.forEach((hvac) => {
       console.log(hvac.toString());
     });
 
-    console.log('Sending power on');
+    console.log("Sending power on");
     await api.hvacs[0].powerOn(api);
     await sleep(10000);
     api.hvacs.forEach((hvac) => {
       console.log(hvac.toString());
     });
 
-    console.log('Sending temperature 68');
-    await api.hvacs[0].setTemperature('68', api);
+    console.log("Sending temperature 68");
+    await api.hvacs[0].setTemperature("68", api);
     await sleep(10000);
     api.hvacs.forEach((hvac) => {
       console.log(hvac.toString());
     });
 
-    console.log('Sending temperature ' + temp);
+    console.log("Sending temperature " + temp);
     await api.hvacs[0].setTemperature(temp, api);
     await sleep(10000);
     api.hvacs.forEach((hvac) => {

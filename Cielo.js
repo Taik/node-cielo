@@ -1,14 +1,14 @@
-const querystring = require('querystring');
-const fetch = require('node-fetch');
-const WebSocket = require('ws');
+const querystring = require("querystring");
+const fetch = require("node-fetch");
+const WebSocket = require("ws");
 
 // Constants
-const API_HOST = 'api.smartcielo.com';
-const API_HTTP_PROTOCOL = 'https://';
+const API_HOST = "api.smartcielo.com";
+const API_HTTP_PROTOCOL = "https://";
 const PING_INTERVAL = 5 * 60 * 1000;
-const DEFAULT_POWER = 'off';
-const DEFAULT_MODE = 'auto';
-const DEFAULT_FAN = 'auto';
+const DEFAULT_POWER = "off";
+const DEFAULT_MODE = "auto";
+const DEFAULT_FAN = "auto";
 const DEFAULT_TEMPERATURE = 75;
 
 // Exports
@@ -86,12 +86,13 @@ class CieloAPIConnection {
           device.deviceName,
           device.applianceId,
           device.fwVersion,
+          device.deviceTypeVersion
         );
         hvac.updateState(
           device.latestAction.power,
           device.latestAction.temp,
           device.latestAction.mode,
-          device.latestAction.fanspeed,
+          device.latestAction.fanspeed
         );
         hvac.updateRoomTemperature(device.latEnv.temp);
         this.hvacs.push(hvac);
@@ -123,7 +124,7 @@ class CieloAPIConnection {
         this.#userID = data.userId;
         this.#accessToken = data.accessToken;
         return;
-      },
+      }
     );
     return Promise.resolve();
   }
@@ -135,11 +136,11 @@ class CieloAPIConnection {
   async #connect() {
     // Establish the WebSockets connection
     const connectUrl = new URL(
-      'wss://apiwss.smartcielo.com/websocket/' +
-        '?sessionId=' +
+      "wss://apiwss.smartcielo.com/websocket/" +
+        "?sessionId=" +
         this.#sessionID +
-        '&token=' +
-        this.#accessToken,
+        "&token=" +
+        this.#accessToken
     );
     const connectPayload = {
       sessionId: this.#agent,
@@ -148,39 +149,39 @@ class CieloAPIConnection {
     this.#ws = new WebSocket(connectUrl, connectPayload);
 
     // Start the socket when opened
-    this.#ws.on('open', () => {
+    this.#ws.on("open", () => {
       this.#startSocket();
     });
 
     // Provide notification to the error callback when the connection is
     // closed
-    this.#ws.on('close', () => {
-      this.#errorCallback(new Error('Connection Closed.'));
+    this.#ws.on("close", () => {
+      this.#errorCallback(new Error("Connection Closed."));
     });
 
     // Subscribe to status updates
-    this.#ws.on('message', (message) => {
+    this.#ws.on("message", (message) => {
       const data = JSON.parse(message);
       if (
         data.message_type &&
-        typeof data.message_type === 'string' &&
+        typeof data.message_type === "string" &&
         data.message_type.length > 0 &&
         data.action &&
-        typeof data.action === 'object'
+        typeof data.action === "object"
       ) {
         const type = data.mid;
         const status = data.action;
         const roomTemp = data.lat_env_var.temperature;
         const thisMac = data.mac_address;
         switch (type) {
-          case 'WEB':
+          case "WEB":
             this.hvacs.forEach((hvac, index) => {
               if (hvac.getMacAddress() === thisMac) {
                 this.hvacs[index].updateState(
                   status.power,
                   status.temp,
                   status.mode,
-                  status.fanspeed,
+                  status.fanspeed
                 );
               }
             });
@@ -188,7 +189,7 @@ class CieloAPIConnection {
               this.#commandCallback(status);
             }
             break;
-          case 'Heartbeat':
+          case "Heartbeat":
             this.hvacs.forEach((hvac, index) => {
               if (hvac.getMacAddress() === thisMac) {
                 this.hvacs[index].updateRoomTemperature(roomTemp);
@@ -203,13 +204,13 @@ class CieloAPIConnection {
     });
 
     // Provide notification to the error callback when an error occurs
-    this.#ws.on('error', (err) => {
+    this.#ws.on("error", (err) => {
       this.#errorCallback(err);
     });
 
     // Return a promise to notify the user when the socket is open
     return new Promise((resolve) => {
-      this.#ws.on('open', () => {
+      this.#ws.on("open", () => {
         resolve();
       });
     });
@@ -224,35 +225,35 @@ class CieloAPIConnection {
    *      sessionID
    */
   async #getAccessTokenAndSessionId(username, password, ip) {
-    const appUserUrl = new URL(API_HTTP_PROTOCOL + API_HOST + '/web/login');
+    const appUserUrl = new URL(API_HTTP_PROTOCOL + API_HOST + "/web/login");
     const appUserPayload = {
       agent: this.#agent,
-      method: 'POST',
+      method: "POST",
       headers: {
-        authority: 'api.smartcielo.com',
-        accept: 'application/json, text/plain, */*',
-        'accept-language': 'en-US,en;q=0.9',
-        'cache-control': 'no-cache',
-        'content-type': 'application/json; charset=UTF-8',
-        origin: 'https://home.cielowigle.com',
-        pragma: 'no-cache',
-        referer: 'https://home.cielowigle.com/',
-        'x-api-key': '7xTAU4y4B34u8DjMsODlEyprRRQEsbJ3IB7vZie4',
+        authority: "api.smartcielo.com",
+        accept: "application/json, text/plain, */*",
+        "accept-language": "en-US,en;q=0.9",
+        "cache-control": "no-cache",
+        "content-type": "application/json; charset=UTF-8",
+        origin: "https://home.cielowigle.com",
+        pragma: "no-cache",
+        referer: "https://home.cielowigle.com/",
+        "x-api-key": "7xTAU4y4B34u8DjMsODlEyprRRQEsbJ3IB7vZie4",
       },
       body: JSON.stringify({
         user: {
           userId: username,
           password: password,
-          mobileDeviceId: 'WEB',
-          deviceTokenId: 'WEB',
-          appType: 'WEB',
-          appVersion: '1.0',
-          timeZone: 'America/Los_Angeles',
-          mobileDeviceName: 'chrome',
-          deviceType: 'WEB',
+          mobileDeviceId: "WEB",
+          deviceTokenId: "WEB",
+          appType: "WEB",
+          appVersion: "1.0",
+          timeZone: "America/Los_Angeles",
+          mobileDeviceName: "chrome",
+          deviceType: "WEB",
           ipAddress: ip,
           isSmartHVAC: 0,
-          locale: 'en',
+          locale: "en",
         },
       }),
     };
@@ -278,29 +279,29 @@ class CieloAPIConnection {
    */
   async #getDeviceInfo() {
     const deviceInfoUrl = new URL(
-      API_HTTP_PROTOCOL + API_HOST + '/web/devices?limit=420',
+      API_HTTP_PROTOCOL + API_HOST + "/web/devices?limit=420"
     );
     const deviceInfoPayload = {
       agent: this.#agent,
-      method: 'GET',
+      method: "GET",
       headers: {
-        authority: 'api.smartcielo.com',
-        accept: '*/*',
-        'accept-language': 'en-US,en;q=0.9',
+        authority: "api.smartcielo.com",
+        accept: "*/*",
+        "accept-language": "en-US,en;q=0.9",
         authorization: this.#accessToken,
-        'cache-control': 'no-cache',
-        'content-type': 'application/json; charset=utf-8',
-        origin: 'https://home.cielowigle.com',
-        pragma: 'no-cache',
-        referer: 'https://home.cielowigle.com/',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': 'macOS',
-        'sec-fetch-dest': 'empty',
-        'sec-fetch-mode': 'cors',
-        'sec-fetch-site': 'cross-site',
-        'user-agent':
-          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
-        'x-api-key': '7xTAU4y4B34u8DjMsODlEyprRRQEsbJ3IB7vZie4',
+        "cache-control": "no-cache",
+        "content-type": "application/json; charset=utf-8",
+        origin: "https://home.cielowigle.com",
+        pragma: "no-cache",
+        referer: "https://home.cielowigle.com/",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "macOS",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "cross-site",
+        "user-agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+        "x-api-key": "7xTAU4y4B34u8DjMsODlEyprRRQEsbJ3IB7vZie4",
       },
     };
     const devicesData = await fetch(deviceInfoUrl, deviceInfoPayload)
@@ -344,32 +345,32 @@ class CieloAPIConnection {
   async #pingSocket() {
     const time = new Date();
     const pingUrl = new URL(
-      'https://api.smartcielo.com/web/token/refresh' +
-        '?refreshToken=' +
-        this.#accessToken,
+      "https://api.smartcielo.com/web/token/refresh" +
+        "?refreshToken=" +
+        this.#accessToken
     );
     const pingPayload = {
       agent: this.#agent,
       headers: {
-        accept: 'application/json, text/plain, */*',
-        'accept-language': 'en-US,en;q=0.9',
+        accept: "application/json, text/plain, */*",
+        "accept-language": "en-US,en;q=0.9",
         authorization: this.#accessToken,
-        'cache-control': 'no-cache',
-        'content-type': 'application/json; charset=utf-8',
-        pragma: 'no-cache',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"macOS"',
-        'sec-fetch-dest': 'empty',
-        'sec-fetch-mode': 'cors',
-        'sec-fetch-site': 'cross-site',
-        'x-api-key': '7xTAU4y4B34u8DjMsODlEyprRRQEsbJ3IB7vZie4',
+        "cache-control": "no-cache",
+        "content-type": "application/json; charset=utf-8",
+        pragma: "no-cache",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"macOS"',
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "cross-site",
+        "x-api-key": "7xTAU4y4B34u8DjMsODlEyprRRQEsbJ3IB7vZie4",
       },
-      referrer: 'https://home.cielowigle.com/',
-      referrerPolicy: 'strict-origin-when-cross-origin',
+      referrer: "https://home.cielowigle.com/",
+      referrerPolicy: "strict-origin-when-cross-origin",
       body: null,
-      method: 'GET',
-      mode: 'cors',
-      credentials: 'include',
+      method: "GET",
+      mode: "cors",
+      credentials: "include",
     };
     const pingResponse = await fetch(pingUrl, pingPayload)
       .then((response) => response.json())
@@ -380,7 +381,7 @@ class CieloAPIConnection {
 
         // Log the difference to the console
         console.log(
-          `The refreshed token will expire in ${diffMinutes} minutes.`,
+          `The refreshed token will expire in ${diffMinutes} minutes.`
         );
         return responseJSON;
       })
@@ -417,17 +418,17 @@ class CieloAPIConnection {
     mode,
     isAction,
     performedAction,
-    performedValue,
+    performedValue
   ) {
     return {
-      fanspeed: fanspeed,
-      light: 'off',
-      mode: isAction && performedAction === 'mode' ? performedValue : mode,
-      oldPower: power,
       power: power,
-      swing: 'auto/stop',
-      temp: isAction && performedAction === 'temp' ? performedValue : temp,
-      turbo: 'off',
+      mode: isAction && performedAction === "mode" ? performedValue : mode,
+      fanspeed: fanspeed,
+      temp: isAction && performedAction === "temp" ? performedValue : temp,
+      swing: "auto/stop",
+      turbo: "off",
+      light: "off",
+      oldPower: power,
     };
   }
 
@@ -441,12 +442,18 @@ class CieloAPIConnection {
    */
   #buildCommandPayload(hvac, performedAction, performedActionValue) {
     const commandCount = this.#commandCount++;
-    const deviceTypeVersion = 'BP01';
     const result = JSON.stringify({
-      action: 'actionControl',
-      actionSource: 'WEB',
+      action: "actionControl",
+      macAddress: hvac.getMacAddress(),
+      deviceTypeVersion: hvac.getDeviceTypeVersion() || "BI01",
+      fwVersion: hvac.getFwVersion(),
+      actionSource: "WEB",
+      applianceType: "AC",
+      applianceId: hvac.getApplianceID(),
       actionType: performedAction,
       actionValue: performedActionValue,
+      connection_source: 2,
+      token: this.#accessToken,
       actions: this.#buildCommand(
         hvac.getTemperature(),
         hvac.getPower(),
@@ -454,17 +461,10 @@ class CieloAPIConnection {
         hvac.getMode(),
         true,
         performedAction,
-        performedActionValue,
+        performedActionValue
       ),
-      applianceId: hvac.getApplianceID(),
-      applianceType: 'AC',
-      application_version: '1.0.0',
-      connection_source: 0,
-      deviceTypeVersion: deviceTypeVersion,
-      fwVersion: hvac.getFwVersion(),
-      macAddress: hvac.getMacAddress(),
       mid: this.#sessionID,
-      token: this.#accessToken,
+      application_version: "1.0.0",
       ts: Math.round(Date.now() / 1000),
     });
     return result;
@@ -489,7 +489,7 @@ class CieloAPIConnection {
           } else {
             resolve();
           }
-        },
+        }
       );
     });
   }
@@ -501,10 +501,11 @@ class CieloHVAC {
   #mode = DEFAULT_MODE;
   #fanSpeed = DEFAULT_FAN;
   #roomTemperature = DEFAULT_TEMPERATURE;
-  #deviceName = 'HVAC';
-  #macAddress = '0000000000';
+  #deviceName = "HVAC";
+  #macAddress = "0000000000";
+  #deviceTypeVersion = "BI01";
   #applianceID = 0;
-  #fwVersion = '0.0.0';
+  #fwVersion = "0.0.0";
 
   /**
    * Creates a new HVAC with the provided parameters
@@ -514,11 +515,24 @@ class CieloHVAC {
    * @param {number} applianceID Internal appliance ID
    * @param {string} fwVersion Firmware version
    */
-  constructor(macAddress, deviceName, applianceID, fwVersion) {
+  constructor(
+    macAddress,
+    deviceName,
+    applianceID,
+    fwVersion,
+    deviceTypeVersion
+  ) {
     this.#macAddress = macAddress;
     this.#deviceName = deviceName;
     this.#applianceID = applianceID;
     this.#fwVersion = fwVersion;
+
+    if (deviceTypeVersion.startsWith("BI")) {
+      this.#deviceTypeVersion = deviceTypeVersion;
+    } else {
+      // Defaults back to BI01 if the deviceTypeVersion is not valid
+      this.#deviceTypeVersion = "BI01";
+    }
   }
 
   /**
@@ -576,6 +590,14 @@ class CieloHVAC {
   }
 
   /**
+   * Returns the device type version
+   * @returns {string}
+   */
+  getDeviceTypeVersion() {
+    return this.#deviceTypeVersion;
+  }
+
+  /**
    * Returns the appliance ID
    *
    * @returns {number}
@@ -610,16 +632,16 @@ class CieloHVAC {
   toString() {
     return (
       this.#deviceName +
-      ' ' +
+      " " +
       this.#macAddress +
-      ': ' +
+      ": " +
       [
         this.#power,
         this.#mode,
         this.#fanSpeed,
         this.#temperature,
         this.#roomTemperature,
-      ].join(', ')
+      ].join(", ")
     );
   }
 
@@ -649,15 +671,15 @@ class CieloHVAC {
   }
 
   setMode(mode, api) {
-    return api.sendCommand(this, 'mode', mode);
+    return api.sendCommand(this, "mode", mode);
   }
 
   setFanSpeed(fanspeed, api) {
-    return api.sendCommand(this, 'fanspeed', fanspeed);
+    return api.sendCommand(this, "fanspeed", fanspeed);
   }
 
   setTemperature(temperature, api) {
-    return api.sendCommand(this, 'temp', temperature);
+    return api.sendCommand(this, "temp", temperature);
   }
 
   /**
@@ -667,7 +689,7 @@ class CieloHVAC {
    * @return {Promise<void>}
    */
   powerOn(api) {
-    return api.sendCommand(this, 'power', 'on');
+    return api.sendCommand(this, "power", "on");
   }
 
   /**
@@ -677,7 +699,7 @@ class CieloHVAC {
    * @return {Promise<void>}
    */
   powerOff(api) {
-    return api.sendCommand(this, 'power', 'off');
+    return api.sendCommand(this, "power", "off");
   }
 }
 
